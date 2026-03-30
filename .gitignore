@@ -1,0 +1,19 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Virtual env
+venv/
+env/
+
+# Data (handled by DVC later)
+data/*.csv
+
+# Models (handled by DVC later)
+models/*.pkl
+
+# MLflow
+mlruns/
+
+# OS
+.DS_Store
