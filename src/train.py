@@ -5,55 +5,97 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, accuracy_score
 import pickle
-from  data_preprocessing import preprocess_data,scale_data
-
 import pandas as pd
+import mlflow
+import mlflow.sklearn
 
-# 1. Load
-df = pd.read_csv("data/Telco-Customer-Churn.csv")
+from data_preprocessing import preprocess_data, scale_data
 
-# 2. Preprocess
-X, y = preprocess_data(df)
+# =========================
+# ✅ FIX: Set tracking location
+# =========================
+mlflow.set_tracking_uri("file:./mlruns")
 
-# 3. Split
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
+# =========================
+# Start MLflow Experiment
+# =========================
+mlflow.set_experiment("Telco Churn Prediction")
 
-# 4. Scale
-X_train, X_test, scaler = scale_data(X_train, X_test)
+with mlflow.start_run():
 
-# 5. Train model
-model = LogisticRegression(class_weight='balanced', max_iter=1000)
-model.fit(X_train, y_train)
+    # =========================
+    # 1. Load Data
+    # =========================
+    df = pd.read_csv("data/Telco-Customer-Churn.csv")
 
-# 6. Threshold tuning
-threshold = 0.4
-y_prob = model.predict_proba(X_test)[:, 1]
-y_pred = (y_prob > threshold).astype(int)
+    # =========================
+    # 2. Preprocess
+    # =========================
+    X, y = preprocess_data(df)
 
-# 7. Evaluate
-print(classification_report(y_test, y_pred))
+    # =========================
+    # 3. Split
+    # =========================
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y,
+        test_size=0.2,
+        random_state=42,
+        stratify=y
+    )
 
-# 8. Save model
-model_data = {
-    "model": model,
-    "scaler": scaler,
-    "threshold": threshold,
-    "columns": X.columns.tolist()
-}
+    # =========================
+    # 4. Scale
+    # =========================
+    X_train, X_test, scaler = scale_data(X_train, X_test)
 
-# Ensure folder exists
-os.makedirs("models", exist_ok=True)
+    # =========================
+    # 5. Train model
+    # =========================
+    model = LogisticRegression(class_weight='balanced', max_iter=1000)
+    model.fit(X_train, y_train)
 
-# Save
-with open("models/model_bundle.pkl", "wb") as f:
-    pickle.dump(model_data, f)
+    # =========================
+    # 6. Threshold tuning
+    # =========================
+    threshold = 0.4
+    y_prob = model.predict_proba(X_test)[:, 1]
+    y_pred = (y_prob > threshold).astype(int)
 
-print("✅ Model saved successfully")
+    # =========================
+    # 7. Evaluate
+    # =========================
+    acc = accuracy_score(y_test, y_pred)
+    print("Accuracy:", acc)
+    print(classification_report(y_test, y_pred))
 
+    # =========================
+    # 🔥 MLflow Logging
+    # =========================
+    mlflow.log_param("model", "LogisticRegression")
+    mlflow.log_param("max_iter", 1000)
+    mlflow.log_param("class_weight", "balanced")
+    mlflow.log_param("threshold", threshold)
+
+    mlflow.log_metric("accuracy", acc)
+
+    # Log model
+    mlflow.sklearn.log_model(model, "model")
+
+    # =========================
+    # Save model locally
+    # =========================
+    model_data = {
+        "model": model,
+        "scaler": scaler,
+        "threshold": threshold,
+        "columns": X.columns.tolist()
+    }
+
+    os.makedirs("models", exist_ok=True)
+
+    with open("models/model_bundle.pkl", "wb") as f:
+        pickle.dump(model_data, f)
+
+    print("✅ Model saved successfully")
