@@ -59,7 +59,7 @@ with mlflow.start_run():
     # =========================
     # 6. Threshold tuning
     # =========================
-    threshold = 0.4
+    threshold = 0.7
     y_prob = model.predict_proba(X_test)[:, 1]
     y_pred = (y_prob > threshold).astype(int)
 
@@ -86,16 +86,22 @@ with mlflow.start_run():
     # =========================
     # Save model locally
     # =========================
-    model_data = {
-        "model": model,
-        "scaler": scaler,
-        "threshold": threshold,
-        "columns": X.columns.tolist()
-    }
+# Save model locally
+# =========================
+os.makedirs("models", exist_ok=True)
 
-    os.makedirs("models", exist_ok=True)
+# Save model bundle
+model_data = {
+    "model": model,
+    "scaler": scaler,
+    "threshold": threshold
+}
 
-    with open("models/model_bundle.pkl", "wb") as f:
-        pickle.dump(model_data, f)
+with open("models/model_bundle.pkl", "wb") as f:
+    pickle.dump(model_data, f)
 
-    print("✅ Model saved successfully")
+# ✅ NEW: Save columns separately
+with open("models/columns.pkl", "wb") as f:
+    pickle.dump(X.columns.tolist(), f)
+
+print("✅ Model + Columns saved successfully")

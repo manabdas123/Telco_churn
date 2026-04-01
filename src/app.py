@@ -1,67 +1,77 @@
 import os
 import pickle
 import pandas as pd
-from flask import Flask, request, jsonify
+from flask import Flask, request, render_template
+
+from data_preprocessing import preprocess_data, scale_data  # reuse logic
+
 
 app = Flask(__name__)
 
 # =========================
-# Load paths properly
+# Load Model + Columns
 # =========================
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+model_path = os.path.join("models", "model_bundle.pkl")
+columns_path = os.path.join("models", "columns.pkl")
 
-model_path = os.path.join(BASE_DIR, "models", "model.pkl")
-scaler_path = os.path.join(BASE_DIR, "models", "scaler.pkl")
-threshold_path = os.path.join(BASE_DIR, "models", "threshold.pkl")
+with open(model_path, "rb") as f:
+    model_data = pickle.load(f)
+
+model = model_data["model"]
+scaler = model_data["scaler"]
+threshold = model_data["threshold"]
+
+with open(columns_path, "rb") as f:
+    columns = pickle.load(f)
 
 # =========================
-# Load objects
-# =========================
-model = pickle.load(open(model_path, "rb"))
-scaler = pickle.load(open(scaler_path, "rb"))
-threshold = pickle.load(open(threshold_path, "rb"))
-
-# =========================
-# Home route
+# Routes
 # =========================
 @app.route("/")
 def home():
-    return "🚀 Churn Prediction API is running!"
+    return render_template("index.html")
 
-# =========================
-# Prediction route
-# =========================
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
-        data = request.json
+        # =========================
+        # 1. Get input from form
+        # =========================
+        input_data = request.form.to_dict()
 
-        # Convert input to DataFrame
-        df = pd.DataFrame([data])
+        # Convert to DataFrame
+        input_df = pd.DataFrame([input_data])
 
-        # ⚠️ IMPORTANT:
-        # You must apply SAME preprocessing as training
-        # For now assuming input is already numeric & aligned
+        # =========================
+        # 2. Preprocess
+        # =========================
+        input_df, _ = preprocess_data(input_df, training=False)
 
-        # Scale input
-        X = scaler.transform(df)
+        # =========================
+        # 3. Align columns
+        # =========================
+        input_df = input_df.reindex(columns=columns, fill_value=0)
 
-        # Predict
-        prob = model.predict_proba(X)[0][1]
-        pred = "Churn" if prob > threshold else "No Churn"
+        # =========================
+        # 4. Scale
+        # =========================
+        input_scaled = scaler.transform(input_df)
 
-        return jsonify({
-            "churn_probability": round(float(prob), 4),
-            "prediction": pred
-        })
+        # =========================
+        # 5. Predict
+        # =========================
+        prob = model.predict_proba(input_scaled)[0][1]
+        prediction = int(prob > threshold)
+
+        result = "Churn" if prediction == 1 else "No Churn"
+
+        return render_template("index.html", prediction_text=f"Result: {result} (Prob: {prob:.2f})")
 
     except Exception as e:
-        return jsonify({
-            "error": str(e)
-        })
+        return f"Error: {str(e)}"
 
 # =========================
-# Run app
+# Run App
 # =========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    app.run(debug=True)
